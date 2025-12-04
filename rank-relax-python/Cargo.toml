@@ -1,0 +1,16 @@
+[package]
+name = "rank-relax-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "rank_relax"
+crate-type = ["cdylib"]
+
+[dependencies]
+rank-relax = { path = ".." }
+pyo3 = { workspace = true }
+

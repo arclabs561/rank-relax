@@ -1,0 +1,24 @@
+# Rust build artifacts
+/target
+Cargo.lock
+
+# Property test regressions
+/proptest-regressions
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.wasm
+*.so
+*.dylib
+*.dll
+

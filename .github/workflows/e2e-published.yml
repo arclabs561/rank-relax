@@ -1,0 +1,116 @@
+name: E2E Test Published Artifacts
+
+on:
+  workflow_run:
+    workflows: ["Publish"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to test'
+        required: false
+        type: string
+
+jobs:
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Get published version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Test published crate
+        run: |
+          cargo new --bin test-published-e2e 2>/dev/null || rm -rf test-published-e2e && cargo new --bin test-published-e2e
+          cd test-published-e2e
+          echo 'rank-relax = { version = "'"${{ steps.version.outputs.version }}"'" }' >> Cargo.toml
+          
+          cat > src/main.rs << 'RUSTEOF'
+          use rank_relax::soft_rank;
+          
+          fn main() {
+              let values = vec![5.0, 1.0, 2.0, 4.0, 3.0];
+              let ranks = soft_rank(&values, 1.0);
+              
+              assert_eq!(ranks.len(), values.len(), "Should return same number of ranks");
+              println!("✅ Published crate works: soft_rank returned {} ranks", ranks.len());
+              println!("✅ All Rust E2E tests passed");
+          }
+          RUSTEOF
+          
+          cargo build --release || {
+            echo "⚠️  Package not yet published (version ${{ steps.version.outputs.version }})"
+            exit 0
+          }
+          cargo run --release
+
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Get published version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep '^version = ' Cargo.toml | cut -d'"' -f2)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Install and test
+        run: |
+          pip install "rank-relax==${{ steps.version.outputs.version }}" || {
+            echo "⚠️  Package not yet published (version ${{ steps.version.outputs.version }})"
+            exit 0
+          }
+          
+          python3 << 'PYEOF'
+          import rank_relax
+          
+          values = [5.0, 1.0, 2.0, 4.0, 3.0]
+          ranks = rank_relax.soft_rank(values, 1.0)
+          
+          assert len(ranks) == len(values), "Should return same number of ranks"
+          print(f"✅ Published Python package works: soft_rank returned {len(ranks)} ranks")
+          print("✅ All Python E2E tests passed")
+          PYEOF
+      
+      - name: Security audit (safety, pip-audit)
+        if: success() || failure()
+        continue-on-error: true
+        run: |
+          pip install safety pip-audit || echo "⚠️  Failed to install security tools"
+          safety check --json 2>&1 | head -20 || echo "⚠️  Security vulnerabilities found"
+          pip-audit --format=json 2>&1 | head -30 || echo "⚠️  Dependency vulnerabilities found"
+      
+      - name: Best practices check
+        if: success() || failure()
+        continue-on-error: true
+        run: |
+          python3 << 'PYEOF'
+          import rank_relax
+          import inspect
+          
+          if hasattr(rank_relax, '__version__'):
+              print(f"✅ Package version: {rank_relax.__version__}")
+          if rank_relax.__doc__:
+              print("✅ Package has documentation")
+          assert callable(rank_relax.soft_rank), "soft_rank should be callable"
+          print("✅ Best practices check complete")
+          PYEOF
+

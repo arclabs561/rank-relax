@@ -1,0 +1,42 @@
+[workspace]
+members = ["rank-relax-python"]
+resolver = "2"
+default-members = ["."]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+license = "MIT OR Apache-2.0"
+authors = ["Arc <attobop@gmail.com>"]
+
+[workspace.dependencies]
+pyo3 = { version = "0.24", features = ["extension-module", "abi3-py37"] }
+criterion = "0.5"
+proptest = "1.5"
+
+[package]
+name = "rank-relax"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Differentiable sorting and ranking operations using smooth relaxation for Rust ML frameworks (candle/burn)"
+repository = "https://github.com/arclabs561/rank-relax"
+documentation = "https://docs.rs/rank-relax"
+keywords = ["ranking", "sorting", "differentiable", "relaxation", "machine-learning", "candle", "burn"]
+categories = ["algorithms", "science"]
+
+[dependencies]
+candle-core = { version = "0.3", optional = true }
+
+[features]
+default = []
+candle = ["dep:candle-core"]
+burn = []  # Will add burn dependencies when implementing
+
+[dev-dependencies]
+criterion = { workspace = true }
+proptest = { workspace = true }
+rank-eval = { path = "../rank-eval", features = ["serde"] }
