@@ -41,7 +41,9 @@ parallel = ["dep:rayon"]
 [dev-dependencies]
 criterion = { workspace = true }
 proptest = { workspace = true }
-rank-eval = { path = "../rank-eval", features = ["serde"] }
+# rank-eval is a separate repository, only used in integration tests
+# Commented out to avoid CI failures when rank-eval is not checked out
+# Uncomment locally if you want to run integration tests: rank-eval = { path = "../rank-eval", features = ["serde"] }
 
 [[bench]]
 name = "ranking_benchmark"
@@ -62,3 +64,7 @@ path = "examples/paper_reproduction_demo.rs"
 [[example]]
 name = "complete_workflow"
 path = "examples/complete_workflow.rs"
+
+[[example]]
+name = "candle_training"
+path = "examples/candle_training.rs"

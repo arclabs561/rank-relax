@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn test_differentiable_topk() {
         let values = vec![5.0, 1.0, 2.0, 4.0, 3.0];
-        let (topk_vals, topk_ranks) = differentiable_topk(&values, 3, 1.0);
+        let (topk_vals, _topk_ranks) = differentiable_topk(&values, 3, 1.0);
         
         assert_eq!(topk_vals.len(), values.len());
         // Top-3 should have higher weights
