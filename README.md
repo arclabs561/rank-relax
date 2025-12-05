@@ -19,7 +19,7 @@ Traditional ranking operations are **discrete** and **non-differentiable**: as y
 
 **Solution**: Smooth relaxations replace discrete operations with continuous, differentiable approximations that preserve ranking semantics while enabling gradient flow. Instead of an instant snap, we create a smooth slide. This enables end-to-end training of models that optimize ranking objectives directly.
 
-For deeper mathematical details, see [MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md).
+For deeper mathematical details, see [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md).
 
 ## Features
 
@@ -137,7 +137,7 @@ grads = grad_fn(predictions)  # Automatic differentiation works!
 - **Use case**: Alternative gradient profiles, experimentation with different smoothing approaches.
 - **Gardner Metaphor**: Like a different flavor of the sigmoid approach, with exponential scaling for different behavior.
 
-**Note**: All current methods are O(n²). For more efficient O(n log n) methods (Permutahedron Projection, Optimal Transport, LapSum), see [MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md) for theoretical foundations and future implementation plans.
+**Note**: All current methods are O(n²). For more efficient O(n log n) methods (Permutahedron Projection, Optimal Transport, LapSum), see [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for theoretical foundations and future implementation plans.
 
 ## Advanced Features
 
@@ -195,7 +195,7 @@ cargo bench
 
 ## Paper Reproduction
 
-This framework can reproduce results from major differentiable ranking papers. See [MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md) for theoretical foundations and [BENCHMARKING.md](BENCHMARKING.md) for reproduction guidelines.
+This framework can reproduce results from major differentiable ranking papers. See [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for theoretical foundations and [BENCHMARKING.md](docs/BENCHMARKING.md) for reproduction guidelines.
 
 ## Installation
 
@@ -226,12 +226,12 @@ maturin develop
 
 ## Documentation
 
-- **[Mathematical Details](MATHEMATICAL_DETAILS.md)** - Comprehensive theory with Gardner-like intuitive explanations
-- [Getting Started](GETTING_STARTED.md) - Installation and basic usage
-- [Examples](EXAMPLES.md) - Practical code examples
-- [Parameter Tuning](PARAMETER_TUNING.md) - How to choose `regularization_strength`
-- [Benchmarking Guide](BENCHMARKING.md) - How to reproduce paper results
-- [Training Integration](TRAINING_INTEGRATION.md) - PyTorch/JAX/Julia integration
+- **[Mathematical Details](docs/MATHEMATICAL_DETAILS.md)** - Comprehensive theory with Gardner-like intuitive explanations
+- [Getting Started](docs/GETTING_STARTED.md) - Installation and basic usage
+- [Examples](docs/EXAMPLES.md) - Practical code examples
+- [Parameter Tuning](docs/PARAMETER_TUNING.md) - How to choose `regularization_strength`
+- [Benchmarking Guide](docs/BENCHMARKING.md) - How to reproduce paper results
+- [Training Integration](docs/TRAINING_INTEGRATION.md) - PyTorch/JAX/Julia integration
 
 ## Testing
 
@@ -245,7 +245,7 @@ cd rank-relax-python && pytest tests/
 
 ## Contributing
 
-Contributions welcome! See [MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md) for implementation priorities and theoretical foundations.
+Contributions welcome! See [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for implementation priorities and theoretical foundations.
 
 ## License
 
