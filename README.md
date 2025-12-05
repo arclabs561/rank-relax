@@ -15,12 +15,17 @@ Differentiable sorting and ranking operations for Rust ML frameworks (candle/bur
 
 Traditional ranking operations (sorting, ranking) are **discrete** and **non-differentiable**, which prevents gradient-based optimization of ranking objectives.
 
-**Problem**: You can't directly optimize Spearman correlation or NDCG during training because gradients can't flow through discrete ranking operations.
+**The Problem**: 
+- As you change a value, its rank jumps by integer steps (0, 1, 2, ...)
+- These "jumps" have zero gradient almost everywhere
+- You can't directly optimize Spearman correlation or NDCG during training because gradients can't flow through discrete ranking operations
 
-**Solution**: `rank-relax` provides **smooth relaxations** that:
-- Preserve ranking semantics
+**The Solution**: `rank-relax` provides **smooth relaxations** that:
+- Preserve ranking semantics (maintain relative ordering)
 - Enable gradient flow through ranking operations
 - Converge to discrete behavior as regularization increases
+
+**Simple Analogy**: Think of discrete ranking as a staircase (non-differentiable at steps). Soft ranking is like a smooth ramp (differentiable everywhere) that approximates the staircase.
 
 ## Purpose
 
@@ -164,11 +169,26 @@ This crate implements **smooth relaxations** of discrete sorting/ranking operati
 
 **Soft Ranking**: Uses sigmoid-based comparisons to compute continuous rank approximations:
 - Each element's rank = average of sigmoid comparisons with all other elements
-- Higher `regularization_strength` → sharper sigmoid → closer to discrete ranks
+- Formula: `rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))`
+- Higher `regularization_strength` (α) → sharper sigmoid → closer to discrete ranks
+- **Complexity**: O(n²) - suitable for small-medium inputs (< 1000 elements)
 
-**Spearman Correlation**: Computed on soft ranks using Pearson correlation formula, enabling differentiable optimization.
+**Spearman Correlation**: Computed on soft ranks using Pearson correlation formula, enabling differentiable optimization:
+- Spearman = Pearson correlation of ranks
+- Loss = 1 - Spearman correlation (lower is better)
+- Gradients flow through the soft ranking operation
 
-See [`CANDLE_BURN_INTEGRATION.md`](CANDLE_BURN_INTEGRATION.md) for detailed explanation of the mathematical framework.
+For comprehensive mathematical formulations, derivations, and theoretical foundations, see **[MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md)**. This document covers:
+- Optimal transport formulation (Sinkhorn algorithm, entropic regularization)
+- Permutahedron projection (isotonic regression, Fenchel-Young losses)
+- Sorting networks (sigmoid relaxations, monotonicity guarantees)
+- NeuralSort/SoftSort (softmax-based relaxations)
+- LapSum method (Laplace distribution approach)
+- Gradient computation and automatic differentiation
+
+For insights on pedagogical approaches and areas where explanations could be improved, see **[PEDAGOGICAL_IMPROVEMENTS.md](PEDAGOGICAL_IMPROVEMENTS.md)**. This document analyzes educational materials (UCSD CSE 291, MIT courses) and identifies intuitive explanations, visualizations, and step-by-step derivations that enhance understanding.
+
+See [`CANDLE_BURN_INTEGRATION.md`](CANDLE_BURN_INTEGRATION.md) for framework-specific integration details.
 
 ## Status
 
@@ -178,9 +198,9 @@ See [`CANDLE_BURN_INTEGRATION.md`](CANDLE_BURN_INTEGRATION.md) for detailed expl
 
 - ✅ Core operations (soft_rank, soft_sort, spearman_loss)
 - ✅ Basic tests
+- ✅ Python bindings (available via PyPI)
 - 🚧 Candle integration (planned)
 - 🚧 Burn integration (planned)
-- ❌ Python bindings (not yet planned)
 - ❌ Performance benchmarks (not yet)
 
 ### Roadmap
@@ -236,10 +256,17 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for a complete walkthrough with
 
 ### Configuration
 
-- `regularization_strength`: Temperature parameter (higher = sharper, more discrete-like)
-  - Typical range: `0.1` to `10.0`
-  - Lower values = smoother gradients
-  - Higher values = closer to discrete ranking
+- `regularization_strength`: Temperature parameter controlling sharpness
+  - **Typical range**: `0.1` to `100.0`
+  - **Rule of thumb**: `≈ 1.0 / typical_difference_between_values`
+  - **Lower values (0.1-1.0)**: Smoother gradients, good for early training
+  - **Medium values (1.0-10.0)**: Balanced between smoothness and accuracy
+  - **Higher values (10.0-100.0)**: Sharper, closer to discrete ranking
+  
+**Example**: If your values differ by ~1.0, use `regularization_strength ≈ 1.0`.
+If differences are ~0.1, use `≈ 10.0`.
+
+See **[PARAMETER_TUNING.md](PARAMETER_TUNING.md)** for detailed guidance.
 
 ## Examples
 
@@ -252,8 +279,37 @@ Performance benchmarks are available via `cargo bench`. See [benches/](benches/)
 ## Documentation
 
 - **[Getting Started Guide](GETTING_STARTED.md)** - Complete walkthrough
+- **[Parameter Tuning Guide](PARAMETER_TUNING.md)** - How to choose `regularization_strength`
+- **[Mathematical Details](MATHEMATICAL_DETAILS.md)** - Comprehensive theory and derivations
+- **[Pedagogical Improvements](PEDAGOGICAL_IMPROVEMENTS.md)** - Educational insights and explanations
 - **[Candle/Burn Integration](CANDLE_BURN_INTEGRATION.md)** - Framework integration details (when available)
 - **[API Documentation](https://docs.rs/rank-relax)** - Full API reference (when published)
+
+## Related Work
+
+Differentiable ranking/sorting implementations and research:
+
+### Implementations
+
+- **[difftopk](https://github.com/Felix-Petersen/difftopk)** (Python/PyTorch): Top-k classification learning with TopKCrossEntropyLoss. Uses sorting networks (bitonic, odd_even). ICML 2022.
+- **[diffsort](https://github.com/Felix-Petersen/diffsort)** (Python/PyTorch): Differentiable sorting networks with relaxed comparators. Implements NeuralSort, SoftSort. ICML 2021.
+- **[torchsort](https://github.com/teddykoker/torchsort)** (Python/PyTorch): Fast differentiable sorting/ranking with CUDA kernels. 846 stars.
+- **[fast-soft-sort](https://research.google/pubs/fast-differentiable-sorting-and-ranking/)** (Google Research): O(n log n) sorting via permutahedron projections. ICML 2020.
+- **[softsort.pytorch](https://github.com/moskomule/softsort.pytorch)**: Optimal transport-based sorting (Sinkhorn). Cuturi et al. (2019).
+
+### Research Papers
+
+**Foundational**: NeuralSort (Grover et al., ICML 2019), Optimal Transport Sorting (Cuturi et al., ICML 2019), Fast Differentiable Sorting (Blondel et al., ICML 2020), SoftSort (Prillo & Eisenschlos, 2020).
+
+**Sorting Networks**: Differentiable Sorting Networks (Petersen et al., ICML 2021), Monotonic Sorting Networks (Petersen et al., 2022), Generalized Neural Sorting Networks (Kim et al., 2023).
+
+**Ranking-Specific**: NeuralNDCG (Pobrotyn & Białobrzeski, 2021), SortNet (Rigutini et al., 2023), LapSum (Struski et al., 2025).
+
+**Underlying Theory**: Permutahedron projections, optimal transport (Sinkhorn algorithm), isotonic regression, sorting networks (bitonic, odd-even merge).
+
+See **[RELATED_WORK.md](RELATED_WORK.md)** for comprehensive survey of implementations, papers, and theory.
+
+**Differences**: `rank-relax` targets Rust ML frameworks (candle/burn), provides Spearman correlation loss, and emphasizes ranking operations over full sorting. Unlike difftopk's top-k focus or diffsort's full permutations, `rank-relax` prioritizes ranking semantics (order preservation) for gradient-based optimization of ranking metrics.
 
 ## See Also
 

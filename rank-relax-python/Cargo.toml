@@ -13,4 +13,12 @@ crate-type = ["cdylib"]
 [dependencies]
 rank-relax = { path = ".." }
 pyo3 = { workspace = true }
+numpy = { version = "0.22", optional = true }
+pyo3-tch = { version = "0.3", optional = true }
+tch = { version = "0.15", optional = true }
+
+[features]
+default = []
+pytorch = ["pyo3-tch", "tch"]
+numpy = ["dep:numpy"]
 

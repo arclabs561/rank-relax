@@ -187,14 +187,27 @@ let total_loss = 0.7 * ranking_loss + 0.3 * classification_loss;
 `rank-relax` implements **smooth relaxations** of discrete operations:
 
 1. **Soft ranking**: Continuous approximation of integer ranks using sigmoid-based comparisons
+   - Formula: `rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))`
+   - Each element's rank is computed by softly counting how many others it's greater than
+   - Complexity: O(n²) - suitable for small-medium inputs
+
 2. **Soft sorting**: Continuous approximation of sorted order
+   - ⚠️ **Note**: Current implementation is a placeholder (uses hard sorting)
+   - True differentiable soft sort coming in future versions
+
 3. **Differentiable correlation**: Spearman correlation computed on soft ranks
+   - Spearman = Pearson correlation of ranks
+   - Loss = 1 - Spearman correlation (lower is better)
+   - Gradients flow through the soft ranking operation
 
 The `regularization_strength` parameter controls sharpness:
-- **Low** (0.1-1.0): Smooth, more differentiable
-- **High** (10-100): Sharper, closer to discrete behavior
+- **Low** (0.1-1.0): Smooth, more differentiable, good for early training
+- **Medium** (1.0-10.0): Balanced between smoothness and accuracy
+- **High** (10-100): Sharper, closer to discrete behavior, better for accurate ranking
 
-See `CANDLE_BURN_INTEGRATION.md` for detailed mathematical framework.
+**Rule of thumb**: `regularization_strength ≈ 1.0 / typical_difference_between_values`
+
+See **[MATHEMATICAL_DETAILS.md](MATHEMATICAL_DETAILS.md)** for comprehensive theory and **[PARAMETER_TUNING.md](PARAMETER_TUNING.md)** for detailed tuning guidance.
 
 ---
 
