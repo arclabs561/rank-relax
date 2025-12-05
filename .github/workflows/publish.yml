@@ -37,6 +37,8 @@ jobs:
       - name: Build and publish to PyPI
         working-directory: rank-relax-python
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          environment: pypi
         # Note: Uses pending trusted publisher - project will be auto-created on first publish
       
       - name: Verify installation
