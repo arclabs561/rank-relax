@@ -30,13 +30,35 @@ categories = ["algorithms", "science"]
 
 [dependencies]
 candle-core = { version = "0.3", optional = true }
+rayon = { version = "1.8", optional = true }
 
 [features]
 default = []
 candle = ["dep:candle-core"]
 burn = []  # Will add burn dependencies when implementing
+parallel = ["dep:rayon"]
 
 [dev-dependencies]
 criterion = { workspace = true }
 proptest = { workspace = true }
 rank-eval = { path = "../rank-eval", features = ["serde"] }
+
+[[bench]]
+name = "ranking_benchmark"
+harness = false
+
+[[bench]]
+name = "performance"
+harness = false
+
+[[example]]
+name = "proof_of_concept"
+path = "examples/proof_of_concept.rs"
+
+[[example]]
+name = "paper_reproduction_demo"
+path = "examples/paper_reproduction_demo.rs"
+
+[[example]]
+name = "complete_workflow"
+path = "examples/complete_workflow.rs"

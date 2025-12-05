@@ -46,17 +46,13 @@
 // TODO: Remove allow(deprecated) when upgrading to pyo3 0.25+ which uses IntoPyObject
 #![allow(deprecated)]
 
-use ::rank_relax::{soft_rank, soft_sort, spearman_loss};
+use ::rank_relax::{
+    soft_rank, soft_sort, spearman_loss,
+    soft_rank_gradient, spearman_loss_gradient,
+    RankingMethod,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-
-#[cfg(feature = "pytorch")]
-use pyo3_tch::PyTensor;
-#[cfg(feature = "pytorch")]
-use tch::{Tensor, Kind};
-
-#[cfg(feature = "numpy")]
-use numpy::{PyArray1, PyArrayMethods};
 
 /// Python module for rank-relax.
 #[pymodule]
@@ -67,21 +63,12 @@ fn rank_relax_module(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(soft_sort_py, m)?)?;
     m.add_function(wrap_pyfunction!(spearman_loss_py, m)?)?;
     
-    // PyTorch functions (optional)
-    #[cfg(feature = "pytorch")]
-    {
-        m.add_function(wrap_pyfunction!(soft_rank_pytorch, m)?)?;
-        m.add_function(wrap_pyfunction!(soft_sort_pytorch, m)?)?;
-        m.add_function(wrap_pyfunction!(spearman_loss_pytorch, m)?)?;
-    }
+    // Gradient functions (analytical)
+    m.add_function(wrap_pyfunction!(soft_rank_gradient_py, m)?)?;
+    m.add_function(wrap_pyfunction!(spearman_loss_gradient_py, m)?)?;
     
-    // NumPy/JAX functions (optional)
-    #[cfg(feature = "numpy")]
-    {
-        m.add_function(wrap_pyfunction!(soft_rank_numpy, m)?)?;
-        m.add_function(wrap_pyfunction!(soft_sort_numpy, m)?)?;
-        m.add_function(wrap_pyfunction!(spearman_loss_numpy, m)?)?;
-    }
+    // Method selection
+    m.add_function(wrap_pyfunction!(soft_rank_with_method_py, m)?)?;
     
     Ok(())
 }
@@ -171,11 +158,98 @@ fn spearman_loss_py(
     Ok(spearman_loss(&rust_predictions, &rust_targets, regularization_strength))
 }
 
+/// Compute analytical gradient of soft_rank.
+///
+/// Returns gradient matrix as list of lists.
+#[pyfunction]
+fn soft_rank_gradient_py(
+    values: &Bound<'_, PyList>,
+    ranks: &Bound<'_, PyList>,
+    regularization_strength: f64,
+) -> PyResult<Vec<Vec<f64>>> {
+    let rust_values: Vec<f64> = values
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let rust_ranks: Vec<f64> = ranks
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    Ok(soft_rank_gradient(&rust_values, &rust_ranks, regularization_strength))
+}
+
+/// Compute analytical gradient of spearman_loss.
+///
+/// Returns gradient vector for predictions.
+#[pyfunction]
+fn spearman_loss_gradient_py(
+    predictions: &Bound<'_, PyList>,
+    targets: &Bound<'_, PyList>,
+    pred_ranks: &Bound<'_, PyList>,
+    target_ranks: &Bound<'_, PyList>,
+    regularization_strength: f64,
+) -> PyResult<Vec<f64>> {
+    let rust_predictions: Vec<f64> = predictions
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let rust_targets: Vec<f64> = targets
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let rust_pred_ranks: Vec<f64> = pred_ranks
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let rust_target_ranks: Vec<f64> = target_ranks
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    Ok(spearman_loss_gradient(
+        &rust_predictions,
+        &rust_targets,
+        &rust_pred_ranks,
+        &rust_target_ranks,
+        regularization_strength,
+    ))
+}
+
+/// Compute soft ranks with method selection.
+///
+/// Methods: "sigmoid", "neural_sort", "probabilistic", "smooth_i"
+#[pyfunction]
+fn soft_rank_with_method_py(
+    values: &Bound<'_, PyList>,
+    regularization_strength: f64,
+    method: Option<String>,
+) -> PyResult<Vec<f64>> {
+    let rust_values: Vec<f64> = values
+        .iter()
+        .map(|v| v.extract::<f64>())
+        .collect::<Result<Vec<_>, _>>()?;
+    
+    let method_enum = match method.as_deref() {
+        Some("neural_sort") => RankingMethod::NeuralSort,
+        Some("probabilistic") => RankingMethod::Probabilistic,
+        Some("smooth_i") => RankingMethod::SmoothI,
+        _ => RankingMethod::Sigmoid,
+    };
+    
+    Ok(method_enum.compute(&rust_values, regularization_strength))
+}
+
 // ============================================================================
-// PyTorch Functions (Optional Feature)
+// PyTorch/NumPy functions (commented out due to dependency conflicts)
+// These can be re-enabled when dependency versions are compatible
 // ============================================================================
 
-#[cfg(feature = "pytorch")]
+#[cfg(all(feature = "pytorch", feature = "tch"))]
 /// Compute soft ranks for PyTorch tensors.
 ///
 /// Preserves gradient tracking if input tensor has `requires_grad=True`.

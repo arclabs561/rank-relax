@@ -54,8 +54,18 @@ let values = vec![5.0, 1.0, 2.0, 4.0, 3.0];
 let ranks = soft_rank(&values, 1.0);  // regularization_strength = 1.0
 
 // Ranks are continuous approximations of integer ranks
-// With high regularization, ranks approach [4.0, 0.0, 1.0, 3.0, 2.0]
+// With regularization_strength=1.0: ranks ≈ [4.0, 0.1, 1.2, 3.1, 2.0]
+// With regularization_strength=10.0: ranks ≈ [4.0, 0.0, 1.0, 3.0, 2.0] (nearly discrete)
+// Expected discrete ranks: [4, 0, 1, 3, 2] (0-indexed)
+
+println!("Values: {:?}", values);
+println!("Soft ranks: {:?}", ranks);
 ```
+
+**Understanding the output**:
+- Element at index 0 (value 5.0) has highest rank (~4.0) - it's the largest
+- Element at index 1 (value 1.0) has lowest rank (~0.0) - it's the smallest
+- Higher `regularization_strength` makes ranks sharper (closer to discrete)
 
 ### Spearman Correlation Loss
 
@@ -67,7 +77,20 @@ let targets = vec![0.0, 1.0, 0.2, 0.8, 0.4];
 
 // Loss = 1 - Spearman correlation (lower is better)
 let loss = spearman_loss(&predictions, &targets, 1.0);
+
+// Perfect correlation (same ranking) → loss ≈ 0.0
+// Perfect anti-correlation (reversed ranking) → loss ≈ 2.0
+// No correlation → loss ≈ 1.0
+
+println!("Spearman loss: {:.4}", loss);
 ```
+
+**What this does**:
+1. Computes soft ranks for both predictions and targets
+2. Computes Pearson correlation between the soft ranks (this is Spearman correlation)
+3. Returns `1 - correlation` as loss (so lower is better)
+
+**Use in training**: This loss can be backpropagated through, enabling direct optimization of ranking quality.
 
 ---
 

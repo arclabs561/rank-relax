@@ -1,0 +1,51 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install maturin
+        run: |
+          pip install maturin
+      
+      - name: Build and install
+        working-directory: rank-relax-python
+        run: |
+          maturin develop
+      
+      - name: Run tests
+        working-directory: rank-relax-python
+        run: |
+          pip install pytest pytest-cov
+          pytest tests/ -v --cov=rank_relax
+      
+      - name: Test publishing readiness
+        working-directory: rank-relax-python
+        run: |
+          maturin build --release
+          python -m pytest tests/test_publishing.py::test_public_api_available -v
+

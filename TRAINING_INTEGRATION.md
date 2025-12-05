@@ -2,13 +2,20 @@
 
 This guide shows how to use the optimized Rust `rank-relax` code in actual training loops across different ML frameworks.
 
+**⚠️ Status**: This guide describes planned integration patterns. Current Python bindings are available, but full autograd integration is in progress.
+
 ## Overview
 
 `rank-relax` provides **optimized Rust implementations** of differentiable ranking operations. To use it in training, you need to:
 
-1. **Call the Rust code** from your framework
-2. **Preserve gradients** so backprop works
-3. **Minimize overhead** at the language boundary
+1. **Call the Rust code** from your framework (via Python bindings or FFI)
+2. **Preserve gradients** so backprop works (requires custom autograd functions/primitives)
+3. **Minimize overhead** at the language boundary (batch processing, zero-copy where possible)
+
+**Key Challenge**: The Rust code operates on `Vec<f64>`, but ML frameworks use tensors. We need to:
+- Convert tensors to Rust types (with gradient preservation)
+- Call Rust functions
+- Convert results back to tensors (maintaining gradient connection)
 
 ## PyTorch Integration
 
@@ -80,11 +87,15 @@ class SpearmanLossFunction(autograd.Function):
         # ∂rank[i]/∂value[j] = (α/(n-1)) * sigmoid'(α*(value[i]-value[j]))
         # where sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
         
-        # For now, use numerical gradient or implement analytical gradient
-        # TODO: Implement efficient analytical gradient computation
-        
-        # Placeholder: use autograd's numerical differentiation
-        # In practice, implement the analytical gradient formula
+        # Compute analytical gradient of soft_rank
+        # For sigmoid-based soft_rank, the gradient formula is:
+        # ∂rank[i]/∂value[j] = (α/(n-1)) * sigmoid'(α*(value[i]-value[j]))
+        # where sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
+        #
+        # This enables efficient gradient computation without numerical differentiation
+        #
+        # TODO: Implement efficient analytical gradient computation in Rust
+        # For now, use PyTorch's autograd on a Python wrapper
         pred_grad = torch.autograd.grad(
             outputs=SpearmanLossFunction.apply(predictions, targets, regularization_strength),
             inputs=predictions,

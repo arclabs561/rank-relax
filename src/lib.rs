@@ -87,10 +87,36 @@ pub mod sort;
 /// Spearman correlation utilities
 pub mod spearman;
 
+/// Analytical gradient computation
+pub mod gradients;
+
+/// Multiple ranking methods from research papers
+pub mod methods;
+
+/// Batch processing utilities
+pub mod batch;
+
+/// Performance-optimized implementations
+pub mod optimized;
+
+/// Advanced ranking methods from research papers
+pub mod methods_advanced;
+
+// Re-export advanced methods
+pub use methods_advanced::{
+    soft_rank_softsort, differentiable_topk, listnet_loss, listmle_loss
+};
+
 // Re-export main functions
 pub use rank::soft_rank;
 pub use sort::soft_sort;
 pub use spearman::spearman_loss;
+pub use gradients::{soft_rank_gradient, spearman_loss_gradient, sigmoid_derivative};
+pub use methods::{RankingMethod, soft_rank_sigmoid, soft_rank_neural_sort, soft_rank_probabilistic, soft_rank_smooth_i};
+pub use batch::{soft_rank_batch, spearman_loss_batch};
+#[cfg(feature = "parallel")]
+pub use optimized::soft_rank_batch_parallel;
+pub use optimized::{soft_rank_optimized, soft_rank_gradient_sparse};
 
 #[cfg(test)]
 mod proptests;

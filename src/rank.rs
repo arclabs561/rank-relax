@@ -127,7 +127,7 @@ pub fn soft_rank(values: &[f64], regularization_strength: f64) -> Vec<f64> {
 ///
 /// This enables smooth transitions between "less than" and "greater than"
 /// comparisons, making ranking operations differentiable.
-fn sigmoid(x: f64) -> f64 {
+pub(crate) fn sigmoid(x: f64) -> f64 {
     1.0 / (1.0 + (-x).exp())
 }
 

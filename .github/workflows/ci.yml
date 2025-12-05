@@ -71,6 +71,106 @@ jobs:
       - name: Test doc examples
         run: cargo test --doc
 
+  # Security and dependency checks
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      
+      - name: Run cargo-audit
+        run: cargo audit
+        continue-on-error: true
+      
+      - name: Install cargo-deny
+        run: |
+          curl -L https://github.com/rustsec/cargo-deny/releases/latest/download/cargo-deny-x86_64-unknown-linux-musl.tar.gz | tar -xz
+          sudo mv cargo-deny /usr/local/bin/
+      
+      - name: Run cargo-deny check
+        run: cargo-deny check
+        continue-on-error: true
+      
+      - name: Check for duplicate dependencies
+        run: cargo tree --duplicates
+        continue-on-error: true
+      
+      - name: Check dependency licenses
+        run: cargo-deny check licenses
+        continue-on-error: true
+
+  # Best practices and quality checks
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      
+      - name: Check for unsafe code
+        run: |
+          echo "Checking for unsafe code usage..."
+          unsafe_count=$(grep -r "unsafe" --include="*.rs" src/ 2>/dev/null | wc -l || echo "0")
+          echo "Found $unsafe_count instances of 'unsafe' keyword"
+          if [ "$unsafe_count" -gt 0 ]; then
+            echo "⚠️  Unsafe code found - review for safety"
+            grep -r "unsafe" --include="*.rs" src/ 2>/dev/null | head -10
+          else
+            echo "✅ No unsafe code found"
+          fi
+        continue-on-error: true
+      
+      - name: Check for unwrap/expect usage
+        run: |
+          echo "Checking for unwrap/expect usage..."
+          unwrap_count=$(grep -r "\.unwrap()\|\.expect(" --include="*.rs" src/ 2>/dev/null | wc -l || echo "0")
+          echo "Found $unwrap_count instances of unwrap/expect"
+          if [ "$unwrap_count" -gt 0 ]; then
+            echo "⚠️  Consider using Result types instead of unwrap/expect"
+            grep -r "\.unwrap()\|\.expect(" --include="*.rs" src/ 2>/dev/null | head -10
+          fi
+        continue-on-error: true
+      
+      - name: Check documentation coverage
+        run: |
+          echo "Checking documentation coverage..."
+          cargo doc --no-deps 2>&1 | grep -E "warning.*missing documentation" | wc -l || echo "0"
+        continue-on-error: true
+      
+      - name: Check for TODO/FIXME comments
+        run: |
+          echo "Checking for TODO/FIXME comments..."
+          todo_count=$(grep -r "TODO\|FIXME" --include="*.rs" src/ 2>/dev/null | grep -v "// TODO:" | wc -l || echo "0")
+          if [ "$todo_count" -gt 0 ]; then
+            echo "Found $todo_count TODO/FIXME comments"
+            grep -r "TODO\|FIXME" --include="*.rs" src/ 2>/dev/null | grep -v "// TODO:" | head -10
+          else
+            echo "✅ No TODO/FIXME comments found"
+          fi
+        continue-on-error: true
+      
+      - name: Check Cargo.toml metadata
+        run: |
+          echo "Checking Cargo.toml metadata..."
+          if ! grep -q "description" Cargo.toml; then
+            echo "⚠️  Missing description in Cargo.toml"
+          fi
+          if ! grep -q "license" Cargo.toml; then
+            echo "⚠️  Missing license in Cargo.toml"
+          fi
+          if ! grep -q "repository" Cargo.toml; then
+            echo "⚠️  Missing repository in Cargo.toml"
+          fi
+          if ! grep -q "documentation" Cargo.toml; then
+            echo "⚠️  Missing documentation URL in Cargo.toml"
+          fi
+          echo "✅ Cargo.toml metadata check complete"
+        continue-on-error: true
+
   mutation:
     runs-on: ubuntu-latest
     steps:

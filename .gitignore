@@ -22,3 +22,6 @@ Thumbs.db
 *.dylib
 *.dll
 
+
+# Archive directory for temporary analysis files
+.archive/

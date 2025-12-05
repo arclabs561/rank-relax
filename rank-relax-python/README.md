@@ -51,6 +51,52 @@ loss = rank_relax.spearman_loss(predictions, targets, regularization_strength=1.
 | `soft_sort(values, regularization_strength)` | Compute soft sorted values | `List[float]` |
 | `spearman_loss(predictions, targets, regularization_strength)` | Spearman correlation loss for training | `float` |
 
+## Development
+
+**For development/contributing:**
+
+```bash
+cd rank-relax-python
+uv venv
+source .venv/bin/activate
+uv tool install maturin
+maturin develop --uv
+```
+
+**Run tests:**
+
+```bash
+pytest tests/ -v
+```
+
+**Test publishing readiness:**
+
+```bash
+# Build wheel
+maturin build --release
+
+# Test installation
+pip install dist/rank_relax-*.whl
+
+# Run publishing tests
+pytest tests/test_publishing.py -v
+```
+
+**Publish to PyPI:**
+
+```bash
+# Build and publish
+maturin publish
+```
+
+## CI/CD
+
+This package includes GitHub Actions workflows:
+- **Test**: Runs on push/PR across Python 3.8-3.12 and multiple OS
+- **Publish**: Automatically publishes to PyPI on release creation
+
+See `.github/workflows/` for details.
+
 ## See Also
 
 - **[rank-relax Rust crate](../README.md)**: Core library documentation

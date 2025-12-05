@@ -1,12 +1,35 @@
 //! Property tests for rank-relax algorithms.
 //!
-//! These tests verify invariants that should always hold:
-//! - Output length matches input length
-//! - Finite output values (no NaN/Inf unless input has them)
-//! - Monotonicity (sorting preserves order, ranking respects order)
-//! - Bounds (ranks in reasonable range, sorted values monotonic)
-//! - Edge cases (empty inputs, single elements, extreme values, large inputs)
-//! - Symmetry and idempotency properties
+//! These tests verify invariants that should always hold for differentiable ranking operations.
+//! Property-based testing generates many random inputs to catch edge cases and ensure correctness.
+//!
+//! # Tested Properties
+//!
+//! ## Basic Invariants
+//! - **Length preservation**: Output length matches input length
+//! - **Finiteness**: Output values are finite (unless input has NaN/Inf)
+//! - **Monotonicity**: Sorting preserves order, ranking respects relative ordering
+//!
+//! ## Bounds and Range
+//! - **Rank bounds**: Soft ranks should be in reasonable range [0, n-1] (with tolerance)
+//! - **Sorted monotonicity**: Sorted values should be non-decreasing
+//!
+//! ## Edge Cases
+//! - **Empty inputs**: Should handle gracefully (return empty)
+//! - **Single element**: Should return rank 0.0
+//! - **Extreme values**: NaN, Inf, -Inf should not cause panics
+//! - **Large inputs**: Should handle 1000+ elements without hanging
+//!
+//! ## Mathematical Properties
+//! - **Symmetry**: Equal values should have similar ranks
+//! - **Idempotency**: Sorting already-sorted values should be similar
+//! - **Correlation behavior**: Perfect correlation → low loss, anti-correlation → high loss
+//!
+//! # How Property Tests Work
+//!
+//! Property tests use `proptest` to generate random inputs and verify properties hold.
+//! Unlike unit tests (which test specific cases), property tests explore the input space
+//! systematically, catching bugs that might only appear with certain value combinations.
 
 #[cfg(test)]
 mod tests {
