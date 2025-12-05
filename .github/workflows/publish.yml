@@ -33,6 +33,9 @@ jobs:
         working-directory: rank-relax-python
         run: |
           maturin build --release
+          # Copy wheels to dist/ for pypa/gh-action-pypi-publish
+          mkdir -p dist
+          cp target/wheels/*.whl dist/
       
       - name: Build and publish to PyPI
         working-directory: rank-relax-python
