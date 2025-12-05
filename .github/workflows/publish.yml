@@ -34,12 +34,10 @@ jobs:
         run: |
           maturin build --release
       
-      - name: Publish to PyPI
+      - name: Build and publish to PyPI
         working-directory: rank-relax-python
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          maturin publish --username __token__ --password $MATURIN_PYPI_TOKEN
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Note: Uses pending trusted publisher - project will be auto-created on first publish
       
       - name: Verify installation
         run: |
