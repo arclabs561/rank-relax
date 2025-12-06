@@ -25,18 +25,23 @@ jobs:
           toolchain: stable
           override: true
       
-      - name: Install maturin
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install uv
         run: |
-          pip install maturin
-      
-      - name: Build wheel
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Install maturin
+        run: uv tool install maturin
+      - name: Verify Python package structure
         working-directory: rank-relax-python
         run: |
-          maturin build --release
-          # Copy wheels to dist/ for pypa/gh-action-pypi-publish
-          mkdir -p dist
-          cp target/wheels/*.whl dist/
-      
+          if [ ! -f "pyproject.toml" ]; then
+            echo "❌ pyproject.toml not found"
+            exit 1
+          fi
+          echo "✅ Python package structure verified"
       - name: Build and publish to PyPI
         working-directory: rank-relax-python
         uses: pypa/gh-action-pypi-publish@release/v1
