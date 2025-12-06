@@ -61,4 +61,3 @@ jobs:
         run: |
           pip install rank-relax
           python -c "import rank_relax; print(f'✅ rank-relax {rank_relax.__version__} installed')"
-# Workflow trigger
