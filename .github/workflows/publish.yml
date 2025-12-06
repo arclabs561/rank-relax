@@ -42,6 +42,13 @@ jobs:
             exit 1
           fi
           echo "✅ Python package structure verified"
+      - name: Build wheel
+        working-directory: rank-relax-python
+        run: |
+          maturin build --release
+          # Copy wheels to dist/ for pypa/gh-action-pypi-publish
+          mkdir -p dist
+          cp target/wheels/*.whl dist/
       - name: Build and publish to PyPI
         working-directory: rank-relax-python
         uses: pypa/gh-action-pypi-publish@release/v1
