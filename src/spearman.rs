@@ -9,7 +9,7 @@
 /// **Spearman correlation** measures how well the rankings of predictions match
 /// the rankings of targets, regardless of their absolute values. It's computed as:
 ///
-/// ```
+/// ```text
 /// Spearman = Pearson_correlation(rank(predictions), rank(targets))
 /// ```
 ///

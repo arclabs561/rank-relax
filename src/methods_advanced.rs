@@ -197,6 +197,220 @@ pub fn listmle_loss(
     loss
 }
 
+#[cfg(feature = "gumbel")]
+mod gumbel {
+    use rand::Rng;
+
+    /// Generate Gumbel noise: G = -log(-log(U)) where U ~ Uniform(0,1)
+    ///
+    /// Gumbel distribution is used in the Gumbel-Softmax trick for differentiable
+    /// discrete sampling. The Gumbel distribution has the property that
+    /// argmax_i (logit_i + G_i) follows the softmax distribution.
+    ///
+    /// # Arguments
+    ///
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    ///
+    /// Gumbel-distributed random value
+    pub fn gumbel_noise(rng: &mut impl Rng) -> f64 {
+        let u: f64 = rng.gen_range(0.0..1.0);
+        // Ensure u is in (0, 1) to avoid log(0) or log(1)
+        let u = u.max(1e-10).min(1.0 - 1e-10);
+        -(-u.ln()).ln()
+    }
+
+    /// Compute softmax: exp(x_i) / sum_j exp(x_j)
+    ///
+    /// Uses numerical stability trick: subtract max before exponentiating.
+    fn softmax(logits: &[f64]) -> Vec<f64> {
+        let n = logits.len();
+        if n == 0 {
+            return vec![];
+        }
+        
+        // Find max for numerical stability
+        let max_logit = logits.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        
+        // Compute exp(x_i - max) and sum
+        let exps: Vec<f64> = logits.iter().map(|&x| (x - max_logit).exp()).collect();
+        let sum: f64 = exps.iter().sum();
+        
+        // Normalize
+        if sum > 1e-10 {
+            exps.iter().map(|&e| e / sum).collect()
+        } else {
+            // Fallback: uniform distribution
+            vec![1.0 / n as f64; n]
+        }
+    }
+
+    /// Gumbel-Softmax: Differentiable sampling from categorical distribution
+    ///
+    /// From: "Categorical Reparameterization with Gumbel-Softmax" (Jang et al., ICLR 2017)
+    ///
+    /// Converts discrete sampling into a differentiable operation by:
+    /// 1. Adding Gumbel noise to logits
+    /// 2. Applying softmax with temperature
+    ///
+    /// # Arguments
+    ///
+    /// * `logits` - Unnormalized log probabilities
+    /// * `temperature` - Temperature parameter (τ). Lower = sharper, higher = smoother
+    /// * `scale` - Scaling factor (κ) for logits. Controls influence of logits vs noise
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    ///
+    /// Soft probability distribution over categories
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rank_relax::gumbel_softmax;
+    /// use rand::thread_rng;
+    ///
+    /// let logits = vec![0.5, 1.0, 0.3];
+    /// let mut rng = thread_rng();
+    /// let probs = gumbel_softmax(&logits, 0.5, 1.0, &mut rng);
+    /// // probs is a probability distribution (sums to 1.0)
+    /// ```
+    pub fn gumbel_softmax(
+        logits: &[f64],
+        temperature: f64,
+        scale: f64,
+        rng: &mut impl Rng,
+    ) -> Vec<f64> {
+        let n = logits.len();
+        if n == 0 {
+            return vec![];
+        }
+        if n == 1 {
+            return vec![1.0];
+        }
+        
+        // Add Gumbel noise and scale: (G_i + κ·logit_i) / τ
+        let mut gumbel_logits = Vec::with_capacity(n);
+        for &logit in logits {
+            let g = gumbel_noise(rng);
+            gumbel_logits.push((g + scale * logit) / temperature);
+        }
+        
+        // Apply softmax
+        softmax(&gumbel_logits)
+    }
+
+    /// Relaxed Top-k using Gumbel-Softmax
+    ///
+    /// From: "Gumbel Reranking: Differentiable End-to-End Reranker Optimization" (Huang et al., ACL 2025)
+    ///
+    /// Approximates top-k selection by:
+    /// 1. Sampling k times independently using Gumbel-Softmax
+    /// 2. Taking element-wise maximum across samples
+    ///
+    /// This creates a soft mask where top-k elements have high values (~1.0)
+    /// and others have low values (~0.0), while remaining fully differentiable.
+    ///
+    /// # Arguments
+    ///
+    /// * `scores` - Reranker scores for each document/element
+    /// * `k` - Number of top elements to select
+    /// * `temperature` - Temperature parameter (τ). Lower = sharper selection
+    /// * `scale` - Scaling factor (κ). Higher = more deterministic, lower = more exploration
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    ///
+    /// Soft attention mask: values in [0, 1], higher for top-k elements
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rank_relax::relaxed_topk_gumbel;
+    /// use rand::thread_rng;
+    ///
+    /// let scores = vec![0.8, 0.6, 0.9, 0.3, 0.7];
+    /// let mut rng = thread_rng();
+    /// let mask = relaxed_topk_gumbel(&scores, 3, 0.5, 1.0, &mut rng);
+    /// // mask[i] ≈ 1.0 for top-3 elements, ≈ 0.0 for others
+    /// ```
+    pub fn relaxed_topk_gumbel(
+        scores: &[f64],
+        k: usize,
+        temperature: f64,
+        scale: f64,
+        rng: &mut impl Rng,
+    ) -> Vec<f64> {
+        let n = scores.len();
+        if n == 0 || k == 0 {
+            return vec![];
+        }
+        if k >= n {
+            // Return all ones (select all)
+            return vec![1.0; n];
+        }
+        
+        let mut max_mask = vec![0.0; n];
+        
+        // Sample k times, take element-wise maximum
+        for _ in 0..k {
+            let mask = gumbel_softmax(scores, temperature, scale, rng);
+            for i in 0..n {
+                if mask[i] > max_mask[i] {
+                    max_mask[i] = mask[i];
+                }
+            }
+        }
+        
+        max_mask
+    }
+
+    /// Generate Gumbel-based attention mask for RAG reranking
+    ///
+    /// This is a convenience function specifically for RAG reranking applications,
+    /// combining relaxed top-k with Gumbel-Softmax to create differentiable attention masks.
+    ///
+    /// # Arguments
+    ///
+    /// * `reranker_scores` - Reranker relevance scores for each document
+    /// * `k` - Number of top documents to select
+    /// * `temperature` - Temperature parameter (default: 0.5 per paper)
+    /// * `scale` - Scaling factor (default: 1.0 per paper)
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    ///
+    /// Soft attention mask: values in [0, 1], can be applied to attention computation
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rank_relax::gumbel_attention_mask;
+    /// use rand::thread_rng;
+    ///
+    /// let reranker_scores = vec![0.8, 0.6, 0.9, 0.3, 0.7];
+    /// let mut rng = thread_rng();
+    /// let attention_mask = gumbel_attention_mask(&reranker_scores, 3, 0.5, 1.0, &mut rng);
+    ///
+    /// // Apply mask to attention: masked_attention[i] = attention[i] * mask[i]
+    /// ```
+    pub fn gumbel_attention_mask(
+        reranker_scores: &[f64],
+        k: usize,
+        temperature: f64,
+        scale: f64,
+        rng: &mut impl Rng,
+    ) -> Vec<f64> {
+        relaxed_topk_gumbel(reranker_scores, k, temperature, scale, rng)
+    }
+}
+
+#[cfg(feature = "gumbel")]
+pub use gumbel::{
+    gumbel_attention_mask, gumbel_softmax, relaxed_topk_gumbel,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,6 +443,82 @@ mod tests {
         let loss = listmle_loss(&predictions, &targets, 1.0);
         assert!(loss >= 0.0);
         assert!(loss.is_finite());
+    }
+
+    #[cfg(feature = "gumbel")]
+    mod gumbel_tests {
+        use super::gumbel::*;
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        #[test]
+        fn test_gumbel_noise() {
+            let mut rng = StdRng::seed_from_u64(42);
+            let noise = gumbel_noise(&mut rng);
+            // Gumbel distribution: mean ≈ 0.577, variance ≈ 1.645
+            assert!(noise.is_finite());
+            assert!(noise > -10.0 && noise < 10.0); // Reasonable range
+        }
+
+        #[test]
+        fn test_gumbel_softmax() {
+            let mut rng = StdRng::seed_from_u64(42);
+            let logits = vec![0.5, 1.0, 0.3];
+            let probs = gumbel_softmax(&logits, 0.5, 1.0, &mut rng);
+            
+            assert_eq!(probs.len(), logits.len());
+            // Should sum to approximately 1.0
+            let sum: f64 = probs.iter().sum();
+            assert!((sum - 1.0).abs() < 1e-6);
+            // All probabilities should be positive
+            assert!(probs.iter().all(|&p| p >= 0.0 && p <= 1.0));
+            // Higher logit should generally have higher probability
+            assert!(probs[1] > probs[0]); // logits[1] = 1.0 > logits[0] = 0.5
+        }
+
+        #[test]
+        fn test_relaxed_topk_gumbel() {
+            let mut rng = StdRng::seed_from_u64(42);
+            let scores = vec![0.8, 0.6, 0.9, 0.3, 0.7];
+            let mask = relaxed_topk_gumbel(&scores, 3, 0.5, 1.0, &mut rng);
+            
+            assert_eq!(mask.len(), scores.len());
+            // All mask values should be in [0, 1]
+            assert!(mask.iter().all(|&m| m >= 0.0 && m <= 1.0));
+            // Top-3 elements (indices 2, 0, 4) should have higher mask values
+            assert!(mask[2] > mask[1]); // 0.9 > 0.6
+            assert!(mask[0] > mask[3]); // 0.8 > 0.3
+        }
+
+        #[test]
+        fn test_gumbel_attention_mask() {
+            let mut rng = StdRng::seed_from_u64(42);
+            let reranker_scores = vec![0.8, 0.6, 0.9, 0.3, 0.7];
+            let mask = gumbel_attention_mask(&reranker_scores, 3, 0.5, 1.0, &mut rng);
+            
+            assert_eq!(mask.len(), reranker_scores.len());
+            assert!(mask.iter().all(|&m| m >= 0.0 && m <= 1.0));
+        }
+
+        #[test]
+        fn test_gumbel_edge_cases() {
+            let mut rng = StdRng::seed_from_u64(42);
+            
+            // Empty input
+            let empty: Vec<f64> = vec![];
+            let probs = gumbel_softmax(&empty, 0.5, 1.0, &mut rng);
+            assert_eq!(probs.len(), 0);
+            
+            // Single element
+            let single = vec![1.0];
+            let probs = gumbel_softmax(&single, 0.5, 1.0, &mut rng);
+            assert_eq!(probs, vec![1.0]);
+            
+            // k >= n
+            let scores = vec![0.5, 0.3];
+            let mask = relaxed_topk_gumbel(&scores, 5, 0.5, 1.0, &mut rng);
+            assert_eq!(mask, vec![1.0, 1.0]);
+        }
     }
 }
 

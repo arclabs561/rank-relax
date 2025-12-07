@@ -1,0 +1,35 @@
+---
+title: "rank-relax Specific Rules"
+id: relax-specific
+description: "Repository-specific rules for rank-relax"
+priority: 50
+alwaysApply: true
+---
+
+# rank-relax Specific Rules
+
+These rules extend the shared base rules with relax-specific guidelines.
+
+## Algorithm-Specific
+
+- **Soft ranking**: Smooth relaxations of discrete operations
+- **Differentiable**: Gradient-based optimization support
+- **ML frameworks**: Candle and Burn integration
+
+## Data Sources
+
+- Example data from `examples/complete_workflow.rs`
+- Training data for differentiable ranking
+- Convergence analysis from examples
+
+## Testing
+
+- Property tests verify mathematical properties
+- Convergence tests verify optimization behavior
+- Framework integration tests (Candle/Burn)
+
+## Documentation
+
+- Soft ranking formulas with convergence plots
+- Training examples in `examples/candle_training.rs`
+- Mathematical foundations in README

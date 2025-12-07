@@ -11,19 +11,14 @@ A high-performance Rust crate with Python bindings that provides smooth relaxati
 
 ## Why Differentiable Ranking?
 
-### The "Kink" Problem
+Discrete ranking operations have zero gradients almost everywhere, preventing optimization of ranking-based metrics during training. This crate provides smooth relaxations that enable gradient flow while preserving ranking semantics.
 
-Traditional ranking operations are **discrete** and **non-differentiable**: as you change a value, its rank jumps by integer steps (0, 1, 2, ...). These "jumps" have zero gradient almost everywhere, preventing optimization of ranking-based metrics (Spearman correlation, NDCG) during training.
-
-**The Runner Metaphor**: Imagine two runners, Alice and Bob. If Alice is at position 5.0 and Bob at 5.1, Bob is ranked #1 and Alice #2. If Alice speeds up to 5.2, she instantly snaps to #1. In the world of calculus (and gradients), this "snap" is a disaster: for almost all possible speeds, the rank doesn't change (derivative is zero), and at the exact moment of passing, it explodes.
-
-**Solution**: Smooth relaxations replace discrete operations with continuous, differentiable approximations that preserve ranking semantics while enabling gradient flow. Instead of an instant snap, we create a smooth slide. This enables end-to-end training of models that optimize ranking objectives directly.
-
-For deeper mathematical details, see [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md).
+See [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for details.
 
 ## Features
 
 - **Multiple Ranking Methods**: Sigmoid-based (default), NeuralSort-style, Probabilistic (SoftRank), SmoothI
+- **Gumbel-Softmax Top-k** (optional `gumbel` feature): Differentiable top-k selection using Gumbel trick for RAG reranking
 - **True Differentiable Sorting**: Permutahedron projection via isotonic regression (O(n log n))
 - **Analytical Gradients**: Efficient closed-form gradient computation (no numerical differentiation)
 - **Batch Processing**: Parallel processing support for multiple rankings (with `parallel` feature)
@@ -52,6 +47,33 @@ let loss = spearman_loss(&predictions, &targets, 1.0);
 // Different methods
 let method = RankingMethod::NeuralSort;
 let ranks = method.compute(&values, 1.0);
+```
+
+### Statistical Analysis (Real Data)
+
+Comprehensive statistical analysis using 1000 real soft ranking computations:
+
+![Soft Ranking Statistical](../hack/viz/soft_ranking_statistical.png)
+
+**Four-panel analysis:**
+- **Top-left**: Error distribution by alpha (box plots showing statistical distribution)
+- **Top-right**: Error distribution histogram with gamma fitting (statistical rigor like games/tenzi)
+- **Bottom-left**: Convergence rate with confidence intervals
+- **Bottom-right**: Example convergence showing soft → discrete as α increases
+
+**Method Comparison:**
+
+![Soft Ranking Method Comparison](../hack/viz/soft_ranking_method_comparison.png)
+
+Comparison of different ranking methods (Sigmoid, NeuralSort, Probabilistic, SmoothI) with error/time trade-off analysis.
+
+**Error Distribution:**
+
+![Soft Ranking Distribution](../hack/viz/soft_ranking_distribution.png)
+
+Error distribution with gamma fitting, showing statistical properties of soft ranking convergence.
+
+**Data Source**: 1000 real soft ranking computations using actual algorithms. See [Visualizations](../hack/viz/SOFT_RANKING_VISUALIZATIONS.md) for complete analysis.
 ```
 
 ### Python
@@ -85,14 +107,40 @@ ranks = rank_relax.soft_rank_with_method(
 
 ```python
 import torch
+import torch.autograd as autograd
 import rank_relax
-from rank_relax.examples.pytorch_autograd import spearman_loss_pytorch
+
+# Custom autograd function for gradient flow
+class SpearmanLossAutograd(autograd.Function):
+    @staticmethod
+    def forward(ctx, predictions, targets, regularization_strength):
+        ctx.save_for_backward(predictions, targets)
+        ctx.regularization_strength = regularization_strength
+        pred = predictions.detach().cpu().numpy()
+        targ = targets.detach().cpu().numpy()
+        loss_val = rank_relax.spearman_loss(pred.tolist(), targ.tolist(), regularization_strength)
+        return torch.tensor(loss_val, device=predictions.device, dtype=predictions.dtype, requires_grad=True)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        predictions, targets = ctx.saved_tensors
+        regularization_strength = ctx.regularization_strength
+        pred = predictions.detach().cpu().numpy()
+        targ = targets.detach().cpu().numpy()
+        pred_ranks = rank_relax.soft_rank(pred.tolist(), regularization_strength)
+        target_ranks = rank_relax.soft_rank(targ.tolist(), regularization_strength)
+        grad = rank_relax.spearman_loss_gradient(pred.tolist(), targ.tolist(), pred_ranks, target_ranks, regularization_strength)
+        grad_scaled = [g * grad_output.item() for g in grad]
+        return torch.tensor(grad_scaled, device=predictions.device, dtype=predictions.dtype), None, None
+
+def spearman_loss_pytorch(predictions, targets, regularization_strength=1.0):
+    return SpearmanLossAutograd.apply(predictions, targets, regularization_strength)
 
 predictions = torch.tensor([0.1, 0.9, 0.3], requires_grad=True)
 targets = torch.tensor([0.0, 1.0, 0.2])
 
 loss = spearman_loss_pytorch(predictions, targets, regularization_strength=1.0)
-loss.backward()  # Gradients flow through Rust implementation!
+loss.backward()
 print(predictions.grad)
 ```
 
@@ -101,41 +149,59 @@ print(predictions.grad)
 ```python
 import jax
 import jax.numpy as jnp
-from rank_relax.examples.jax_primitive import spearman_loss_jax
+from jax import core
+from jax.interpreters import ad
+import rank_relax
+
+# Custom JAX primitive for gradient flow
+spearman_loss_p = core.Primitive("spearman_loss_rust")
+
+def spearman_loss_jax(predictions, targets, regularization_strength=1.0):
+    return spearman_loss_p.bind(predictions, targets, regularization_strength=regularization_strength)
+
+spearman_loss_p.def_impl(lambda p, t, r: jnp.array(rank_relax.spearman_loss(p.tolist(), t.tolist(), r)))
+spearman_loss_p.def_abstract_eval(lambda p, t, r: core.ShapedArray((), p.dtype))
+
+def spearman_loss_jvp(primals, tangents, *, regularization_strength):
+    predictions, targets = primals
+    pred_dot, target_dot = tangents
+    y = spearman_loss_jax(predictions, targets, regularization_strength)
+    pred_list = predictions.tolist()
+    targ_list = targets.tolist()
+    pred_ranks = rank_relax.soft_rank(pred_list, regularization_strength)
+    target_ranks = rank_relax.soft_rank(targ_list, regularization_strength)
+    grad = rank_relax.spearman_loss_gradient(pred_list, targ_list, pred_ranks, target_ranks, regularization_strength)
+    y_dot = jnp.sum(jnp.array(grad) * pred_dot)
+    return y, y_dot
+
+ad.primitive_jvps[spearman_loss_p] = spearman_loss_jvp
+
+def spearman_loss_transpose(ct, predictions, targets, *, regularization_strength):
+    if predictions is None:
+        return None, None, None
+    pred_list = predictions.tolist()
+    targ_list = targets.tolist()
+    pred_ranks = rank_relax.soft_rank(pred_list, regularization_strength)
+    target_ranks = rank_relax.soft_rank(targ_list, regularization_strength)
+    grad = rank_relax.spearman_loss_gradient(pred_list, targ_list, pred_ranks, target_ranks, regularization_strength)
+    return jnp.array(grad) * ct, None, None
+
+ad.primitive_transposes[spearman_loss_p] = spearman_loss_transpose
 
 predictions = jnp.array([0.1, 0.9, 0.3])
 targets = jnp.array([0.0, 1.0, 0.2])
 
 loss = spearman_loss_jax(predictions, targets, regularization_strength=1.0)
 grad_fn = jax.grad(lambda p: spearman_loss_jax(p, targets, 1.0))
-grads = grad_fn(predictions)  # Automatic differentiation works!
+grads = grad_fn(predictions)
 ```
 
 ## Available Methods
 
-### 1. Sigmoid-based (Default)
-- **Intuition**: The "naive" but effective approach. Each element's rank is computed by comparing it to all others using smooth sigmoid functions instead of hard comparisons.
-- **Complexity**: O(n²)
-- **Use case**: General purpose, intuitive, well-tested. Best for small-medium inputs (n < 1000).
-- **Gardner Metaphor**: Like counting how many runners are ahead of you, but instead of a sharp "yes/no," you use a smooth probability curve.
-
-### 2. NeuralSort-style
-- **Intuition**: Uses temperature-scaled softmax to create sharper rankings. Similar to sigmoid but with different gradient behavior.
-- **Complexity**: O(n²)
-- **Use case**: When you need permutation matrices or different gradient profiles.
-- **Gardner Metaphor**: Like a more sophisticated version of the sigmoid approach, with temperature control for fine-tuning sharpness.
-
-### 3. Probabilistic (SoftRank)
-- **Intuition**: Uses Gaussian smoothing to create probabilistic rank distributions, modeling uncertainty in rankings.
-- **Complexity**: O(n²)
-- **Use case**: When you want probabilistic rank distributions or uncertainty modeling.
-- **Gardner Metaphor**: Like measuring rank with a fuzzy ruler—instead of exact positions, you get probability distributions.
-
-### 4. SmoothI
-- **Intuition**: Uses exponential scaling to create smooth rank position indicators with alternative gradient profiles.
-- **Complexity**: O(n²)
-- **Use case**: Alternative gradient profiles, experimentation with different smoothing approaches.
-- **Gardner Metaphor**: Like a different flavor of the sigmoid approach, with exponential scaling for different behavior.
+- **Sigmoid-based (default)**: Compares elements using smooth sigmoid functions. O(n²). General purpose, best for small-medium inputs.
+- **NeuralSort-style**: Temperature-scaled softmax for sharper rankings. O(n²). Useful for permutation matrices or different gradient profiles.
+- **Probabilistic (SoftRank)**: Gaussian smoothing for probabilistic rank distributions. O(n²). For uncertainty modeling.
+- **SmoothI**: Exponential scaling for alternative gradient profiles. O(n²). For experimentation with different smoothing approaches.
 
 **Note**: All current methods are O(n²). For more efficient O(n log n) methods (Permutahedron Projection, Optimal Transport, LapSum), see [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for theoretical foundations and future implementation plans.
 
@@ -179,6 +245,51 @@ use rank_relax::soft_rank_gradient_sparse;
 let grad = soft_rank_gradient_sparse(&values, &ranks, 1.0, threshold=0.01);
 ```
 
+### Gumbel-Softmax Top-k (RAG Reranking)
+
+For RAG reranking applications requiring end-to-end optimization:
+
+```rust
+use rank_relax::{relaxed_topk_gumbel, gumbel_attention_mask};
+use rand::thread_rng;
+
+// Enable gumbel feature: cargo add rank-relax --features gumbel
+
+let reranker_scores = vec![0.8, 0.6, 0.9, 0.3, 0.7];
+let mut rng = thread_rng();
+
+// Generate soft attention mask for top-3 documents
+let attention_mask = gumbel_attention_mask(
+    &reranker_scores,
+    3,      // top-k
+    0.5,    // temperature (τ)
+    1.0,    // scale (κ)
+    &mut rng,
+);
+
+// Apply mask to attention computation for end-to-end optimization
+// Gradients flow: language_loss → attention → mask → reranker
+```
+
+**Use Case**: End-to-end reranker training in RAG systems without labeled data. See [GUMBEL_RERANKING.md](docs/GUMBEL_RERANKING.md) for details and connection to "Gumbel Reranking" (ACL 2025) paper.
+
+Run examples:
+```bash
+# Basic example
+cargo run --example gumbel_reranking --features gumbel
+
+# RAG training simulation
+cargo run --example gumbel_rag_training --features gumbel
+
+# Comparison with sigmoid method
+cargo run --example gumbel_vs_sigmoid_comparison --features gumbel
+```
+
+**Visualization**: Generate statistical analysis:
+```bash
+uv run hack/viz/generate_gumbel_analysis.py
+```
+
 ## Performance
 
 Benchmark results (on typical hardware):
@@ -193,9 +304,13 @@ Run benchmarks:
 cargo bench
 ```
 
+## Framework Integration
+
+Works with PyTorch, JAX, Julia, and Rust ML frameworks (Candle/Burn). See examples above for PyTorch and JAX integration patterns. For Candle/Burn examples, see `examples/candle_training.rs` and `examples/burn_training.rs`.
+
 ## Paper Reproduction
 
-This framework can reproduce results from major differentiable ranking papers. See [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) for theoretical foundations and [BENCHMARKING.md](docs/BENCHMARKING.md) for reproduction guidelines.
+See [MATHEMATICAL_DETAILS.md](docs/MATHEMATICAL_DETAILS.md) and [BENCHMARKING.md](docs/BENCHMARKING.md) for paper reproduction guidelines.
 
 ## Installation
 
@@ -226,7 +341,7 @@ maturin develop
 
 ## Documentation
 
-- **[Mathematical Details](docs/MATHEMATICAL_DETAILS.md)** - Comprehensive theory with Gardner-like intuitive explanations
+- **[Mathematical Details](docs/MATHEMATICAL_DETAILS.md)** - Theory and derivations
 - [Getting Started](docs/GETTING_STARTED.md) - Installation and basic usage
 - [Examples](docs/EXAMPLES.md) - Practical code examples
 - [Parameter Tuning](docs/PARAMETER_TUNING.md) - How to choose `regularization_strength`

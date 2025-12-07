@@ -24,15 +24,15 @@ use crate::rank::sigmoid;
 /// Compute the gradient of soft_rank with respect to input values.
 ///
 /// For sigmoid-based soft ranking:
-/// ```
-/// rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))
+/// ```text
+/// rank[i] = (1/(n-1)) * sum_{j != i} sigmoid(alpha * (values[i] - values[j]))
 /// ```
 ///
 /// The gradient with respect to `values[k]` is:
-/// ```
-/// ∂rank[i]/∂values[k] = {
-///   if i == k: (α/(n-1)) * Σ_{j≠i} sigmoid'(α * (values[i] - values[j]))
-///   if i != k: -(α/(n-1)) * sigmoid'(α * (values[i] - values[k]))
+/// ```text
+/// d(rank[i])/d(values[k]) = {
+///   if i == k: (alpha/(n-1)) * sum_{j != i} sigmoid'(alpha * (values[i] - values[j]))
+///   if i != k: -(alpha/(n-1)) * sigmoid'(alpha * (values[i] - values[k]))
 /// }
 /// ```
 ///
@@ -46,7 +46,7 @@ use crate::rank::sigmoid;
 ///
 /// # Returns
 ///
-/// Gradient matrix [n, n] where `grad[i][j] = ∂rank[i]/∂values[j]`
+/// Gradient matrix [n, n] where `grad[i][j] = d(rank[i])/d(values[j])`
 pub fn soft_rank_gradient(
     values: &[f64],
     ranks: &[f64],
@@ -105,7 +105,7 @@ pub fn soft_rank_gradient(
 /// The gradient requires:
 /// 1. Gradient of soft_rank w.r.t. predictions
 /// 2. Gradient of Pearson correlation w.r.t. ranks
-/// 3. Chain rule: ∂L/∂pred = (∂L/∂rank_pred) * (∂rank_pred/∂pred)
+/// 3. Chain rule: dL/dpred = (dL/drank_pred) * (drank_pred/dpred)
 ///
 /// # Arguments
 ///
@@ -117,7 +117,7 @@ pub fn soft_rank_gradient(
 ///
 /// # Returns
 ///
-/// Gradient vector [n] where `grad[i] = ∂loss/∂predictions[i]`
+/// Gradient vector [n] where `grad[i] = d(loss)/d(predictions[i])`
 pub fn spearman_loss_gradient(
     predictions: &[f64],
     _targets: &[f64],

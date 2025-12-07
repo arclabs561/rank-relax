@@ -29,6 +29,10 @@ jobs:
       - name: Report candle feature status
         if: failure()
         run: echo "⚠️ Candle feature test failed - check logs above"
+      - name: Test examples
+        run: |
+          cargo build --examples || echo "⚠️  Some examples may require features"
+          cargo run --example proof_of_concept || echo "⚠️  Example may require features"
 
   msrv:
     runs-on: ubuntu-latest

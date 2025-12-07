@@ -39,8 +39,8 @@ use crate::rank::sigmoid;
 /// create smooth approximations of discrete ranking.
 ///
 /// **Algorithm**: For each element, count (softly) how many others it's greater than:
-/// ```
-/// rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))
+/// ```text
+/// rank[i] = (1/(n-1)) * sum_{j != i} sigmoid(alpha * (values[i] - values[j]))
 /// ```
 ///
 /// **From**: General differentiable ranking approach (Qin et al., 2008)
@@ -93,8 +93,8 @@ pub fn soft_rank_sigmoid(values: &[f64], regularization_strength: f64) -> Vec<f6
 /// which was designed to produce differentiable permutation matrices.
 ///
 /// **Algorithm**: Uses temperature-scaled sigmoid for pairwise comparisons:
-/// ```
-/// rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid((values[i] - values[j]) / temperature)
+/// ```text
+/// rank[i] = (1/(n-1)) * sum_{j != i} sigmoid((values[i] - values[j]) / temperature)
 /// ```
 ///
 /// **From**: "NeuralSort: A Differentiable Sorting Operator" (Grover et al., ICML 2019)
@@ -163,9 +163,9 @@ pub fn soft_rank_neural_sort(values: &[f64], temperature: f64) -> Vec<f64> {
 /// treating score differences as random variables.
 ///
 /// **Algorithm**: Uses normal CDF approximation for pairwise comparisons:
-/// ```
-/// P(score_i > score_j) ≈ Φ((value_i - value_j) / (σ√2))
-/// rank[i] = (1/(n-1)) * Σ_{j≠i} P(score_i > score_j)
+/// ```text
+/// P(score_i > score_j) ≈ Phi((value_i - value_j) / (sigma * sqrt(2)))
+/// rank[i] = (1/(n-1)) * sum_{j != i} P(score_i > score_j)
 /// ```
 /// where Φ is the standard normal CDF (approximated using sigmoid).
 ///
@@ -232,8 +232,8 @@ pub fn soft_rank_probabilistic(values: &[f64], sigma: f64) -> Vec<f64> {
 /// providing a different gradient profile than standard sigmoid-based approaches.
 ///
 /// **Algorithm**: Uses exponential-scaled sigmoid for pairwise comparisons:
-/// ```
-/// rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))
+/// ```text
+/// rank[i] = (1/(n-1)) * sum_{j != i} sigmoid(alpha * (values[i] - values[j]))
 /// ```
 ///
 /// The key difference from standard sigmoid is the exponential scaling parameter α,

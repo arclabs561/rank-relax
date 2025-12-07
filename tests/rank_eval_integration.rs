@@ -1,5 +1,8 @@
 //! Integration tests for rank-relax using rank-eval.
 //!
+//! These tests are only compiled if the `rank-eval` feature is enabled.
+//! In CI, rank-eval is a separate repository and may not be available.
+//!
 //! These tests validate that differentiable ranking operations maintain
 //! quality compared to discrete ranking, and demonstrate how to use
 //! rank-eval for evaluation.

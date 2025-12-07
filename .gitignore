@@ -25,3 +25,4 @@ Thumbs.db
 
 # Archive directory for temporary analysis files
 .archive/
+docs/output/

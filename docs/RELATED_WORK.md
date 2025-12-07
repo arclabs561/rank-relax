@@ -2,6 +2,19 @@
 
 Comprehensive survey of implementations, research papers, and underlying theory for differentiable sorting and ranking operations.
 
+## Recent Applications: Gumbel Reranking (ACL 2025)
+
+**"Gumbel Reranking: Differentiable End-to-End Reranker Optimization"** (Huang et al., 2025) applies differentiable ranking techniques to RAG systems:
+
+- **Technique**: Gumbel-Softmax + Relaxed Top-k for differentiable document selection
+- **Application**: End-to-end reranker training in RAG without labeled data
+- **Key Innovation**: Views reranking as learning a differentiable attention mask
+- **Results**: 10.4% improvement on HotpotQA for multi-hop reasoning
+
+**Connection to rank-relax**: This paper demonstrates a practical application of the techniques rank-relax provides. The paper uses Gumbel-Softmax and relaxed top-k sampling—techniques that could be added to rank-relax as advanced methods.
+
+See [GUMBEL_RERANKING.md](GUMBEL_RERANKING.md) for detailed analysis and implementation notes.
+
 ## Implementations
 
 ### Python/PyTorch Libraries

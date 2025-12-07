@@ -11,8 +11,8 @@
 /// to the input while maintaining differentiability.
 ///
 /// **Mathematical formulation**:
-/// ```
-/// soft_sort(x) = argmin_{y: y_1 ≤ y_2 ≤ ... ≤ y_n} ||y - x||²
+/// ```text
+/// soft_sort(x) = argmin_{y: y_1 <= y_2 <= ... <= y_n} ||y - x||^2
 /// ```
 ///
 /// This is solved using the **Pool Adjacent Violators Algorithm (PAVA)**:

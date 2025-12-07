@@ -43,8 +43,8 @@
 //!
 //! The current implementation uses the "naive" sigmoid-based approach:
 //!
-//! ```
-//! rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))
+//! ```text
+//! rank[i] = (1/(n-1)) * sum_{j != i} sigmoid(alpha * (values[i] - values[j]))
 //! ```
 //!
 //! where `α = regularization_strength` controls sharpness.
@@ -69,8 +69,8 @@
 //! - **High (10.0-100.0)**: Sharper, closer to discrete ranking
 //!
 //! **Rule of thumb**: Choose based on the scale of differences in your values.
-//! If values differ by ~1.0, use `regularization_strength ≈ 1.0`.
-//! If differences are ~0.1, use `≈ 10.0`.
+//! If values differ by ~1.0, use `regularization_strength ~= 1.0`.
+//! If differences are ~0.1, use `~= 10.0`.
 //!
 //! # Mathematical Background
 //!
@@ -105,6 +105,12 @@ pub mod methods_advanced;
 // Re-export advanced methods
 pub use methods_advanced::{
     soft_rank_softsort, differentiable_topk, listnet_loss, listmle_loss
+};
+
+// Re-export Gumbel methods (requires "gumbel" feature)
+#[cfg(feature = "gumbel")]
+pub use methods_advanced::{
+    gumbel_attention_mask, gumbel_softmax, relaxed_topk_gumbel,
 };
 
 // Re-export main functions

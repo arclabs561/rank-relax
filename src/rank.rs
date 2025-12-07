@@ -7,12 +7,12 @@
 //! # Algorithm
 //!
 //! The rank of element `i` is computed as:
-//! ```
-//! rank[i] = (1/(n-1)) * Σ_{j≠i} sigmoid(α * (values[i] - values[j]))
+//! ```text
+//! rank[i] = (1/(n-1)) * sum_{j != i} sigmoid(alpha * (values[i] - values[j]))
 //! ```
 //!
 //! where:
-//! - `α = regularization_strength` controls the sharpness of the sigmoid
+//! - `alpha = regularization_strength` controls the sharpness of the sigmoid
 //! - `sigmoid(x) = 1/(1 + exp(-x))` provides a smooth approximation to the step function
 //!
 //! **Intuition**: For each element, we count (softly) how many other elements it's greater than.
@@ -34,7 +34,7 @@
 //! - **High values (10.0-100.0)**: Sharper, closer to discrete ranking
 //!
 //! Choose based on the scale of differences in your values. If values differ by ~1.0,
-//! use `regularization_strength ≈ 1.0`. If differences are ~0.1, use `≈ 10.0`.
+//! use `regularization_strength ~= 1.0`. If differences are ~0.1, use `~= 10.0`.
 
 /// Compute soft ranks for a vector of values.
 ///

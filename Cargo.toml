@@ -31,12 +31,14 @@ categories = ["algorithms", "science"]
 [dependencies]
 candle-core = { version = "0.3", optional = true }
 rayon = { version = "1.8", optional = true }
+rand = { version = "0.8", optional = true }
 
 [features]
 default = []
 candle = ["dep:candle-core"]
 burn = []  # Will add burn dependencies when implementing
 parallel = ["dep:rayon"]
+gumbel = ["dep:rand"]  # Gumbel-Softmax and relaxed top-k methods
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -51,6 +53,10 @@ harness = false
 
 [[bench]]
 name = "performance"
+harness = false
+
+[[bench]]
+name = "gumbel_benchmark"
 harness = false
 
 [[example]]
